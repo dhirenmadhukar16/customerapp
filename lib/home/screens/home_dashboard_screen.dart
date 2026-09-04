@@ -3,6 +3,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'dart:ui' as ui;
 import '../../core/location/google_geocoding_service.dart';
 import '../../core/network/api_client.dart';
@@ -133,7 +134,8 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     final longitude = prefs.getDouble('customer_lng');
     final address = prefs.getString('customer_address');
     if (latitude == null || longitude == null) return;
-    if (mounted) setState(() => _currentAddress = address ?? 'Selected location');
+    if (mounted)
+      setState(() => _currentAddress = address ?? 'Selected location');
     await _findNearestStore(latitude, longitude);
     await loadDashboard();
   }
@@ -211,6 +213,56 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
   List get activeOrders => dashboard['activeOrders'] ?? [];
   List get recentOrders => dashboard['recentOrders'] ?? [];
   List get latestUpdates => dashboard['latestUpdates'] ?? [];
+
+  void _openServicesPage() {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const CustomerShell(initialIndex: 1),
+      ),
+    );
+  }
+
+  Future<void> _openStoreGoogleProfile() async {
+    final store = _nearestStore;
+    if (store == null) return;
+
+    final directUrl = store['googleMapsUrl'] ??
+        store['googleBusinessUrl'] ??
+        store['googlePlaceUrl'];
+    final placeId = store['googlePlaceId'] ?? store['placeId'];
+    final storeName =
+        (store['name'] ?? store['storeName'] ?? 'WhiteFox Laundry').toString();
+    final address =
+        (store['address'] ?? store['storeAddress'] ?? '').toString();
+
+    Uri uri;
+    if (directUrl != null && directUrl.toString().trim().isNotEmpty) {
+      uri = Uri.parse(directUrl.toString().trim());
+    } else if (placeId != null && placeId.toString().trim().isNotEmpty) {
+      uri = Uri.https('www.google.com', '/maps/search/', {
+        'api': '1',
+        'query': '$storeName $address'.trim(),
+        'query_place_id': placeId.toString().trim(),
+      });
+    } else {
+      uri = Uri.https('www.google.com', '/maps/search/', {
+        'api': '1',
+        'query': '$storeName $address'.trim(),
+      });
+    }
+
+    final opened = await launchUrl(
+      uri,
+      mode: LaunchMode.externalApplication,
+    );
+    if (!opened && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Unable to open the store on Google Maps.')),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -295,14 +347,24 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                             Row(
                               children: [
                                 _summaryCard(
-                                    'Bookings',
+                                    'Active Bookings',
                                     activeBookings.length.toString(),
-                                    Icons.calendar_month),
+                                    Icons.calendar_month,
+                                    () => _openActiveItems(
+                                          title: 'Active Bookings',
+                                          items: activeBookings,
+                                          booking: true,
+                                        )),
                                 const SizedBox(width: 12),
                                 _summaryCard(
                                     'Active Orders',
                                     activeOrders.length.toString(),
-                                    Icons.local_laundry_service),
+                                    Icons.local_laundry_service,
+                                    () => _openActiveItems(
+                                          title: 'Active Orders',
+                                          items: activeOrders,
+                                          booking: false,
+                                        )),
                               ],
                             ),
                             const SizedBox(height: 22),
@@ -368,43 +430,84 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
 
   Widget _careManagerCard() {
     final store = _nearestStore!;
-    final manager = store['storeAdminName'] ?? store['managerName'] ?? 'WhiteFox Care Team';
-    final storeName = store['name'] ?? store['storeName'] ?? 'Assigned WhiteFox Store';
+    final manager =
+        store['storeAdminName'] ?? store['managerName'] ?? 'WhiteFox Care Team';
+    final storeName =
+        store['name'] ?? store['storeName'] ?? 'Assigned WhiteFox Store';
     final address = store['address'] ?? store['storeAddress'] ?? '';
     final distance = store['distanceKm'];
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(colors: [Color(0xFF172554), Color(0xFF312E81)]),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('YOUR WHITEFOX CARE MANAGER',
-            style: TextStyle(color: Colors.white60, fontSize: 11, fontWeight: FontWeight.w800)),
-        const SizedBox(height: 12),
-        Row(children: [
-          const CircleAvatar(radius: 25, backgroundColor: Colors.white, child: Icon(Icons.support_agent, color: AppTheme.primary)),
-          const SizedBox(width: 12),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(manager.toString(), style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w900)),
-            Text(storeName.toString(), style: const TextStyle(color: Colors.white70)),
-          ])),
-        ]),
-        if (address.toString().isNotEmpty) ...[
+    return GestureDetector(
+      onTap: _openStoreGoogleProfile,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+              colors: [Color(0xFF172554), Color(0xFF312E81)]),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('YOUR WHITEFOX CARE MANAGER',
+              style: TextStyle(
+                  color: Colors.white60,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800)),
           const SizedBox(height: 12),
-          Text(address.toString(), style: const TextStyle(color: Colors.white70, fontSize: 12)),
-        ],
-        if (distance != null)
-          Padding(
-            padding: const EdgeInsets.only(top: 5),
-            child: Text('${(distance as num).toStringAsFixed(1)} km from your location',
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+          Row(children: [
+            const CircleAvatar(
+                radius: 25,
+                backgroundColor: Colors.white,
+                child: Icon(Icons.support_agent, color: AppTheme.primary)),
+            const SizedBox(width: 12),
+            Expanded(
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                  Text(manager.toString(),
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 17,
+                          fontWeight: FontWeight.w900)),
+                  Text(storeName.toString(),
+                      style: const TextStyle(color: Colors.white70)),
+                ])),
+          ]),
+          if (address.toString().isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Text(address.toString(),
+                style: const TextStyle(color: Colors.white70, fontSize: 12)),
+          ],
+          if (distance != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 5),
+              child: Text(
+                  '${(distance as num).toStringAsFixed(1)} km from your location',
+                  style: const TextStyle(
+                      color: Colors.white, fontWeight: FontWeight.w700)),
+            ),
+          const SizedBox(height: 10),
+          const Text(
+              'Personally coordinating your pickup, garment care and delivery.',
+              style: TextStyle(color: Colors.white70, fontSize: 12)),
+          const SizedBox(height: 12),
+          const Row(
+            children: [
+              Icon(Icons.map_outlined, color: Colors.white, size: 17),
+              SizedBox(width: 7),
+              Text(
+                'View store on Google Maps',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              Spacer(),
+              Icon(Icons.open_in_new, color: Colors.white70, size: 16),
+            ],
           ),
-        const SizedBox(height: 10),
-        const Text('Personally coordinating your pickup, garment care and delivery.',
-            style: TextStyle(color: Colors.white70, fontSize: 12)),
-      ]),
+        ]),
+      ),
     );
   }
 
@@ -472,19 +575,23 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                   ),
                 ),
                 const Spacer(),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Text(
-                    'Book Now',
-                    style: TextStyle(
-                      color: AppTheme.primary,
-                      fontWeight: FontWeight.w800,
-                      fontSize: 13,
+                InkWell(
+                  onTap: _openServicesPage,
+                  borderRadius: BorderRadius.circular(10),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 20, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Text(
+                      'Book Now',
+                      style: TextStyle(
+                        color: AppTheme.primary,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 13,
+                      ),
                     ),
                   ),
                 ),
@@ -496,37 +603,89 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     );
   }
 
-  Widget _summaryCard(String title, String value, IconData icon) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: Colors.black.withValues(alpha: 0.05)),
-          boxShadow: [
-            BoxShadow(
-                color: Colors.black.withValues(alpha: 0.03),
-                blurRadius: 10,
-                offset: const Offset(0, 4)),
-          ],
+  void _openActiveItems({
+    required String title,
+    required List items,
+    required bool booking,
+  }) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => Scaffold(
+          backgroundColor: AppTheme.background,
+          appBar: AppBar(
+            title: Text(
+              title,
+              style: const TextStyle(fontWeight: FontWeight.w900),
+            ),
+          ),
+          body: items.isEmpty
+              ? Center(
+                  child: Text(
+                    booking ? 'No active bookings.' : 'No active orders.',
+                    style: const TextStyle(
+                      color: AppTheme.mutedText,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.all(18),
+                  itemCount: items.length,
+                  itemBuilder: (context, index) {
+                    final item = Map<String, dynamic>.from(items[index] as Map);
+                    return booking ? _bookingCard(item) : _orderCard(item);
+                  },
+                ),
         ),
-        child: Column(
-          children: [
-            Icon(icon, color: AppTheme.primary, size: 28),
-            const SizedBox(height: 10),
-            Text(value,
-                style: const TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w900,
-                    color: AppTheme.darkText)),
-            const SizedBox(height: 4),
-            Text(title,
-                style: const TextStyle(
-                    color: AppTheme.mutedText,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 12)),
-          ],
+      ),
+    );
+  }
+
+  Widget _summaryCard(
+    String title,
+    String value,
+    IconData icon,
+    VoidCallback onTap,
+  ) {
+    return Expanded(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(20),
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: Colors.black.withValues(alpha: 0.05)),
+              boxShadow: [
+                BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.03),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4)),
+              ],
+            ),
+            child: Column(
+              children: [
+                Icon(icon, color: AppTheme.primary, size: 28),
+                const SizedBox(height: 10),
+                Text(value,
+                    style: const TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w900,
+                        color: AppTheme.darkText)),
+                const SizedBox(height: 4),
+                Text(title,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                        color: AppTheme.mutedText,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12)),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -607,7 +766,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
         gradient: const [Color(0xFFBF360C), Color(0xFFE64A19)],
         icon: Icons.timer_outlined,
         title: '24-hour express\nturnaround available.',
-        subtitle: 'Get your clothes back in a day',
+        subtitle: 'Get your clothes within 6-24 hours for urgent needs.',
         tag: 'Schedule →',
         onTap: () {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -797,6 +956,89 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                     color: AppTheme.darkText),
               )
             : null,
+      ),
+    );
+  }
+
+  Widget _bookingCard(Map<String, dynamic> item) {
+    final bookingNumber =
+        item['bookingNumber'] ?? item['bookingCode'] ?? item['id'] ?? 'Booking';
+    final status = item['status'] ?? item['bookingStatus'] ?? 'REQUESTED';
+    final storeName = item['storeName'] ?? item['assignedStoreName'];
+    final pickup =
+        item['pickupDate'] ?? item['scheduledPickupAt'] ?? item['pickupSlot'];
+    final amount =
+        item['totalAmount'] ?? item['estimatedAmount'] ?? item['amount'];
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.black.withValues(alpha: 0.05)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        leading: Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: AppTheme.accent.withValues(alpha: 0.3),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: const Icon(Icons.calendar_month, color: AppTheme.primary),
+        ),
+        title: Text(
+          bookingNumber.toString(),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14),
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              status.toString(),
+              style: const TextStyle(
+                color: AppTheme.primary,
+                fontWeight: FontWeight.w700,
+                fontSize: 13,
+              ),
+            ),
+            if (storeName != null)
+              Text(
+                storeName.toString(),
+                style: const TextStyle(
+                  color: AppTheme.mutedText,
+                  fontSize: 12,
+                ),
+              ),
+            if (pickup != null)
+              Text(
+                'Pickup: $pickup',
+                style: const TextStyle(
+                  color: AppTheme.mutedText,
+                  fontSize: 12,
+                ),
+              ),
+          ],
+        ),
+        trailing: amount == null
+            ? null
+            : Text(
+                '₹$amount',
+                style: const TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 14,
+                  color: AppTheme.darkText,
+                ),
+              ),
       ),
     );
   }
