@@ -211,7 +211,6 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
 
   List get activeBookings => dashboard['activeBookings'] ?? [];
   List get activeOrders => dashboard['activeOrders'] ?? [];
-  List get recentOrders => dashboard['recentOrders'] ?? [];
   List get latestUpdates => dashboard['latestUpdates'] ?? [];
 
   void _openServicesPage() {
@@ -367,10 +366,6 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                                         )),
                               ],
                             ),
-                            const SizedBox(height: 22),
-                            _sectionHeader('Recent Orders'),
-                            const SizedBox(height: 10),
-                            _orderList(recentOrders),
                             const SizedBox(height: 22),
                             _sectionHeader('Latest Updates'),
                             const SizedBox(height: 10),
@@ -707,15 +702,6 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                   color: AppTheme.primary, fontWeight: FontWeight.bold)),
         ),
       ],
-    );
-  }
-
-  Widget _orderList(List items) {
-    if (items.isEmpty) {
-      return _emptyCard('No recent orders yet.');
-    }
-    return Column(
-      children: items.map((item) => _orderCard(item)).toList(),
     );
   }
 
