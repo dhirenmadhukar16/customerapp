@@ -20,6 +20,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
 
   // Data
   List<dynamic> catalogData = [];
+  List<Map<String, dynamic>> packages = [];
   List<String> mainCategories = [];
 
   // State
@@ -58,8 +59,22 @@ class _ServicesScreenState extends State<ServicesScreen> {
         error = null;
       });
 
-      final response = await ApiClient.dio.get('/api/customer-app/services');
-      final data = response.data as List;
+      final responses = await Future.wait<dynamic>([
+        ApiClient.dio
+            .get('/api/customer-app/services')
+            .then((response) => response.data),
+        ApiClient.dio
+            .get('/api/customer-app/packages')
+            .then((response) => response.data)
+            .catchError((_) => <dynamic>[]),
+      ]);
+      final data = responses[0] as List;
+      final packageData = responses[1] is List
+          ? (responses[1] as List)
+              .whereType<Map>()
+              .map((item) => Map<String, dynamic>.from(item))
+              .toList()
+          : <Map<String, dynamic>>[];
 
       final Set<String> mainCats = {};
       for (var item in data) {
@@ -72,8 +87,11 @@ class _ServicesScreenState extends State<ServicesScreen> {
 
       setState(() {
         catalogData = data;
+        packages = packageData;
         mainCategories = mainCats.toList();
-        if (mainCategories.isNotEmpty) {
+        if (packages.isNotEmpty) {
+          selectedMainCategory = 'Packages';
+        } else if (mainCategories.isNotEmpty) {
           selectedMainCategory = mainCategories.first;
         }
       });
@@ -211,15 +229,17 @@ class _ServicesScreenState extends State<ServicesScreen> {
               : Column(
                   children: [
                     // Main Categories TabBar
-                    if (mainCategories.isNotEmpty)
+                    if (mainCategories.isNotEmpty || packages.isNotEmpty)
                       SizedBox(
                         height: 50,
                         child: ListView.builder(
                           scrollDirection: Axis.horizontal,
                           padding: const EdgeInsets.symmetric(horizontal: 16),
-                          itemCount: mainCategories.length,
+                          itemCount: mainCategories.length + 1,
                           itemBuilder: (context, index) {
-                            final cat = mainCategories[index];
+                            final cat = index == 0
+                                ? 'Packages'
+                                : mainCategories[index - 1];
                             final isSelected = cat == selectedMainCategory;
                             return Padding(
                               padding: const EdgeInsets.only(right: 8),
@@ -246,7 +266,9 @@ class _ServicesScreenState extends State<ServicesScreen> {
                     Expanded(
                       child: selectedMainCategory == null
                           ? const Center(child: Text('No services found'))
-                          : _buildServicesList(selectedMainCategory!),
+                          : selectedMainCategory == 'Packages'
+                              ? _buildPackagesSection()
+                              : _buildServicesList(selectedMainCategory!),
                     ),
 
                     // Cart Summary Bottom Sheet
@@ -416,6 +438,326 @@ class _ServicesScreenState extends State<ServicesScreen> {
         );
       },
     );
+  }
+
+  Widget _buildPackagesSection() {
+    if (packages.isEmpty) {
+      return RefreshIndicator(
+        onRefresh: loadServices,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: const [
+            SizedBox(height: 120),
+            Icon(Icons.inventory_2_outlined,
+                size: 58, color: AppTheme.mutedText),
+            SizedBox(height: 14),
+            Center(
+              child: Text(
+                'No packages are available right now',
+                style: TextStyle(
+                    color: AppTheme.mutedText, fontWeight: FontWeight.w700),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: loadServices,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(20, 6, 20, 24),
+        children: [
+          Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF0B6E4F), Color(0xFF23A36D)],
+              ),
+              borderRadius: BorderRadius.circular(22),
+            ),
+            child: const Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'WhiteFox Value Packages',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900),
+                ),
+                SizedBox(height: 5),
+                Text(
+                  'Premium garment care bundled at a better value.',
+                  style: TextStyle(color: Colors.white, fontSize: 13),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 18),
+          ...packages.map(_packageCard),
+        ],
+      ),
+    );
+  }
+
+  Widget _packageCard(Map<String, dynamic> package) {
+    final items = package['items'] is List ? package['items'] as List : const [];
+    final price = _asDouble(package['price']);
+    final catalogueValue = _asDouble(package['catalogueValue']);
+    final savings = _asDouble(package['savingsAmount']);
+    final savingsPercentage = _asDouble(package['savingsPercentage']);
+    final imageUrl = package['imageUrl']?.toString() ?? '';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: AppTheme.softShadow,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (imageUrl.isNotEmpty)
+            Image.network(
+              imageUrl,
+              width: double.infinity,
+              height: 145,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => _packageImageFallback(),
+            )
+          else
+            _packageImageFallback(),
+          Padding(
+            padding: const EdgeInsets.all(17),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        package['name']?.toString() ?? 'WhiteFox Package',
+                        style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w900,
+                            color: AppTheme.navy),
+                      ),
+                    ),
+                    if (package['featured'] == true)
+                      _packageBadge('FEATURED', const Color(0xFF7C3AED)),
+                  ],
+                ),
+                if ((package['description']?.toString() ?? '').isNotEmpty) ...[
+                  const SizedBox(height: 7),
+                  Text(
+                    package['description'].toString(),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: AppTheme.mutedText),
+                  ),
+                ],
+                const SizedBox(height: 13),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _packageBadge('${items.length} SERVICES', AppTheme.primary),
+                    if (savings > 0)
+                      _packageBadge(
+                        'SAVE ${savingsPercentage.toStringAsFixed(0)}%',
+                        const Color(0xFFE8790A),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 15),
+                Row(
+                  children: [
+                    Text(
+                      '₹${price.toStringAsFixed(2)}',
+                      style: const TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w900,
+                          color: AppTheme.primary),
+                    ),
+                    if (catalogueValue > price) ...[
+                      const SizedBox(width: 9),
+                      Text(
+                        '₹${catalogueValue.toStringAsFixed(2)}',
+                        style: const TextStyle(
+                          color: AppTheme.mutedText,
+                          decoration: TextDecoration.lineThrough,
+                        ),
+                      ),
+                    ],
+                    const Spacer(),
+                    OutlinedButton(
+                      onPressed: () => _showPackageDetails(package),
+                      child: const Text('View Details'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _packageImageFallback() {
+    return Container(
+      height: 112,
+      width: double.infinity,
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xFFE8F7EF), Color(0xFFD8F1E4)],
+        ),
+      ),
+      child: const Icon(Icons.local_laundry_service_rounded,
+          size: 54, color: AppTheme.primary),
+    );
+  }
+
+  Widget _packageBadge(String text, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.11),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(text,
+          style: TextStyle(
+              color: color, fontSize: 10, fontWeight: FontWeight.w900)),
+    );
+  }
+
+  void _showPackageDetails(Map<String, dynamic> package) {
+    final items = package['items'] is List ? package['items'] as List : const [];
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+      ),
+      builder: (context) => SafeArea(
+        child: DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: 0.72,
+          minChildSize: 0.45,
+          maxChildSize: 0.92,
+          builder: (context, controller) => ListView(
+            controller: controller,
+            padding: const EdgeInsets.all(22),
+            children: [
+              Center(
+                child: Container(
+                  width: 44,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                package['name']?.toString() ?? 'WhiteFox Package',
+                style: const TextStyle(
+                    fontSize: 23,
+                    fontWeight: FontWeight.w900,
+                    color: AppTheme.navy),
+              ),
+              const SizedBox(height: 6),
+              Text(package['description']?.toString() ?? '',
+                  style: const TextStyle(color: AppTheme.mutedText)),
+              const SizedBox(height: 20),
+              const Text('Package includes',
+                  style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w900,
+                      color: AppTheme.navy)),
+              const SizedBox(height: 8),
+              ...items.map((raw) {
+                final item = raw is Map
+                    ? Map<String, dynamic>.from(raw)
+                    : <String, dynamic>{};
+                final variant = item['variantName']?.toString() ?? '';
+                return ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const CircleAvatar(
+                    backgroundColor: Color(0xFFE8F7EF),
+                    child: Icon(Icons.check, color: AppTheme.primary),
+                  ),
+                  title: Text(item['itemName']?.toString() ?? 'Service',
+                      style: const TextStyle(fontWeight: FontWeight.w800)),
+                  subtitle: Text([
+                    if (variant.isNotEmpty) variant,
+                    if ((item['categoryName']?.toString() ?? '').isNotEmpty)
+                      item['categoryName'].toString(),
+                  ].join(' • ')),
+                  trailing: Text(
+                    '${item['quantity'] ?? 1}×',
+                    style: const TextStyle(
+                        color: AppTheme.primary,
+                        fontWeight: FontWeight.w900),
+                  ),
+                );
+              }),
+              if ((package['validUntil']?.toString() ?? '').isNotEmpty) ...[
+                const Divider(height: 28),
+                Text(
+                  'Available until ${_formatPackageDate(package['validUntil'])}',
+                  style: const TextStyle(
+                      color: AppTheme.mutedText, fontWeight: FontWeight.w700),
+                ),
+              ],
+              if ((package['termsAndConditions']?.toString() ?? '')
+                  .isNotEmpty) ...[
+                const SizedBox(height: 16),
+                const Text('Terms & conditions',
+                    style: TextStyle(fontWeight: FontWeight.w900)),
+                const SizedBox(height: 5),
+                Text(package['termsAndConditions'].toString(),
+                    style: const TextStyle(color: AppTheme.mutedText)),
+              ],
+              const SizedBox(height: 18),
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF7E8),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Text(
+                  'Package checkout will be enabled once package-based booking is activated.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                      color: Color(0xFF9A5B00), fontWeight: FontWeight.w700),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  double _asDouble(dynamic value) {
+    if (value is num) return value.toDouble();
+    return double.tryParse(value?.toString() ?? '') ?? 0;
+  }
+
+  String _formatPackageDate(dynamic value) {
+    final date = DateTime.tryParse(value?.toString() ?? '');
+    if (date == null) return value?.toString() ?? '-';
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+    return '${date.day.toString().padLeft(2, '0')} ${months[date.month - 1]} ${date.year}';
   }
 
   Widget _row(String title, String value, {bool bold = false}) {
