@@ -12,6 +12,7 @@ import 'location_picker_screen.dart';
 import 'company_blog_screen.dart';
 import '../../notifications/screens/notifications_screen.dart';
 import '../../navigation/customer_shell.dart';
+import '../../orders/screens/customer_orders_screen.dart';
 
 class HomeDashboardScreen extends StatefulWidget {
   const HomeDashboardScreen({super.key});
@@ -359,11 +360,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                                     'Active Orders',
                                     activeOrders.length.toString(),
                                     Icons.local_laundry_service,
-                                    () => _openActiveItems(
-                                          title: 'Active Orders',
-                                          items: activeOrders,
-                                          booking: false,
-                                        )),
+                                    _openOrdersPage),
                               ],
                             ),
                             const SizedBox(height: 22),
@@ -633,6 +630,15 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                   },
                 ),
         ),
+      ),
+    );
+  }
+
+  void _openOrdersPage() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const CustomerOrdersScreen(initialView: 0),
       ),
     );
   }

@@ -8,7 +8,12 @@ import '../../core/realtime/realtime_service.dart';
 import '../../payments/screens/customer_payment_screen.dart';
 
 class CustomerOrdersScreen extends StatefulWidget {
-  const CustomerOrdersScreen({super.key});
+  final int initialView;
+
+  const CustomerOrdersScreen({
+    super.key,
+    this.initialView = 0,
+  });
 
   @override
   State<CustomerOrdersScreen> createState() => _CustomerOrdersScreenState();
@@ -23,10 +28,12 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> {
   List recentOrders = [];
   final realtimeService = RealtimeService();
   String customerId = '';
+  late int selectedView;
 
   @override
   void initState() {
     super.initState();
+    selectedView = widget.initialView == 1 ? 1 : 0;
     initData();
   }
 
@@ -115,6 +122,7 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> {
   @override
   Widget build(BuildContext context) {
     final pastOrders = recentOrders.where(isPastOrder).toList();
+    final activeItemsCount = bookings.length + activeOrders.length;
 
     return Scaffold(
       backgroundColor: AppTheme.background,
@@ -147,35 +155,157 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> {
               : RefreshIndicator(
                   onRefresh: loadAll,
                   child: ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
                     padding: const EdgeInsets.all(18),
                     children: [
-                      _sectionTitle('Active Orders'),
+                      _ordersOverview(activeItemsCount, pastOrders.length),
+                      const SizedBox(height: 18),
+                      _viewSelector(),
+                      const SizedBox(height: 20),
+                      _sectionTitle(
+                        selectedView == 0 ? 'Active Orders' : 'Past Orders',
+                      ),
                       const SizedBox(height: 12),
-                      (activeOrders.isEmpty && bookings.isEmpty)
-                          ? _emptyCard('No active orders',
-                              'assets/images/empty_basket.png')
-                          : Column(
-                              children: [
-                                ...bookings.map((b) => _bookingCard(b)),
-                                ...activeOrders
-                                    .map((o) => _orderCard(o, active: true)),
-                              ],
-                            ),
-                      const SizedBox(height: 28),
-                      _sectionTitle('Past Orders'),
-                      const SizedBox(height: 12),
-                      pastOrders.isEmpty
-                          ? _emptyCard('No past orders yet.',
-                              'assets/images/empty_towels.png')
-                          : Column(
-                              children: pastOrders
-                                  .map((o) => _orderCard(o, active: false))
-                                  .toList(),
-                            ),
+                      if (selectedView == 0)
+                        activeItemsCount == 0
+                            ? _emptyCard('No active orders',
+                                'assets/images/empty_basket.png')
+                            : Column(
+                                children: [
+                                  ...bookings.map((b) => _bookingCard(b)),
+                                  ...activeOrders.map(
+                                    (o) => _orderCard(o, active: true),
+                                  ),
+                                ],
+                              )
+                      else
+                        pastOrders.isEmpty
+                            ? _emptyCard('No past orders yet.',
+                                'assets/images/empty_towels.png')
+                            : Column(
+                                children: pastOrders
+                                    .map((o) => _orderCard(o, active: false))
+                                    .toList(),
+                              ),
                       const SizedBox(height: 20),
                     ],
                   ),
                 ),
+    );
+  }
+
+  Widget _ordersOverview(int activeCount, int pastCount) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF0F6B3A), Color(0xFF1A8C4E)],
+        ),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        children: [
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Your garment journey',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                SizedBox(height: 5),
+                Text(
+                  'Track every pickup, care stage and delivery.',
+                  style: TextStyle(color: Colors.white70, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+          _overviewCount(activeCount, 'Active'),
+          const SizedBox(width: 10),
+          _overviewCount(pastCount, 'Past'),
+        ],
+      ),
+    );
+  }
+
+  Widget _overviewCount(int count, String label) {
+    return Container(
+      width: 58,
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.16),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        children: [
+          Text(
+            '$count',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 20,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          Text(label,
+              style: const TextStyle(color: Colors.white70, fontSize: 10)),
+        ],
+      ),
+    );
+  }
+
+  Widget _viewSelector() {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.black.withValues(alpha: 0.05)),
+      ),
+      child: Row(
+        children: [
+          _viewButton(0, 'Active', Icons.local_laundry_service_outlined),
+          _viewButton(1, 'Past', Icons.history),
+        ],
+      ),
+    );
+  }
+
+  Widget _viewButton(int index, String label, IconData icon) {
+    final selected = selectedView == index;
+    return Expanded(
+      child: InkWell(
+        onTap: () => setState(() => selectedView = index),
+        borderRadius: BorderRadius.circular(11),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(vertical: 11),
+          decoration: BoxDecoration(
+            color: selected ? AppTheme.primary : Colors.transparent,
+            borderRadius: BorderRadius.circular(11),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon,
+                  size: 18,
+                  color: selected ? Colors.white : AppTheme.mutedText),
+              const SizedBox(width: 7),
+              Text(
+                label,
+                style: TextStyle(
+                  color: selected ? Colors.white : AppTheme.darkText,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -218,6 +348,7 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> {
 
   Widget _bookingCard(dynamic b) {
     final status = b['status']?.toString() ?? 'REQUESTED';
+    final bookingDate = b['createdAt'] ?? b['bookingDate'] ?? b['requestedAt'];
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -260,6 +391,7 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> {
               ],
             ),
             const SizedBox(height: 16),
+            _row('Booked on', _formatDate(bookingDate)),
             _row('Pickup',
                 '${b['pickupDate'] ?? '-'} • ${b['pickupTimeSlot'] ?? '-'}'),
             _row('Store', '${b['storeName'] ?? 'Not assigned'}'),
@@ -273,7 +405,7 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> {
                 ),
                 const Spacer(),
                 Text(
-                  '₹${b['estimatedAmount'] ?? 0}',
+                  _formatAmount(b['estimatedAmount'] ?? b['amount']),
                   style: const TextStyle(
                     color: AppTheme.darkText,
                     fontWeight: FontWeight.w900,
@@ -305,6 +437,11 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> {
 
   Widget _orderCard(dynamic o, {required bool active}) {
     final status = o['status']?.toString() ?? '';
+    final orderDate = o['orderDate'] ?? o['createdAt'] ?? o['placedAt'];
+    final deliveryDate = o['deliveryDate'] ??
+        o['expectedDeliveryDate'] ??
+        o['dueDate'] ??
+        o['deliveredAt'];
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -346,7 +483,7 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> {
                 const SizedBox(width: 14),
                 Expanded(
                   child: Text(
-                    o['orderNumber'] ?? 'Order',
+                    (o['orderNumber'] ?? 'Order').toString(),
                     style: TextStyle(
                       fontWeight: FontWeight.w900,
                       fontSize: 16,
@@ -363,7 +500,18 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> {
               ],
             ),
             const SizedBox(height: 16),
+            _row('Order date', _formatDate(orderDate)),
+            if (deliveryDate != null)
+              _row(
+                status == 'DELIVERED' ? 'Delivered' : 'Due date',
+                _formatDate(deliveryDate),
+              ),
             _row('Store', '${o['storeName'] ?? '-'}'),
+            if (o['paymentStatus'] != null)
+              _row(
+                'Payment',
+                o['paymentStatus'].toString().replaceAll('_', ' '),
+              ),
             const Divider(height: 24),
             Row(
               children: [
@@ -374,7 +522,7 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> {
                 ),
                 const Spacer(),
                 Text(
-                  '₹${o['totalAmount'] ?? 0}',
+                  _formatAmount(o['totalAmount'] ?? o['amount']),
                   style: const TextStyle(
                     fontWeight: FontWeight.w900,
                     color: AppTheme.darkText,
@@ -585,6 +733,38 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> {
         ],
       ),
     );
+  }
+
+  String _formatAmount(dynamic value) {
+    final amount = value is num
+        ? value.toDouble()
+        : double.tryParse(value?.toString() ?? '') ?? 0;
+    return '₹${amount.toStringAsFixed(2)}';
+  }
+
+  String _formatDate(dynamic value) {
+    if (value == null || value.toString().trim().isEmpty) return '-';
+
+    final raw = value.toString().trim();
+    final parsed = DateTime.tryParse(raw);
+    if (parsed == null) return raw;
+
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    final local = parsed.toLocal();
+    return '${local.day} ${months[local.month - 1]} ${local.year}';
   }
 
   Widget _statusChip(String status) {
