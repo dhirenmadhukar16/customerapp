@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/network/api_client.dart';
+import '../../core/security/secure_token_storage.dart';
 import '../../core/theme/app_theme.dart';
 import '../../auth/screens/customer_login_screen.dart';
 import 'edit_profile_screen.dart';
@@ -275,7 +276,11 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
                         width: double.infinity,
                         height: 55,
                         child: OutlinedButton.icon(
-                          onPressed: () {
+                          onPressed: () async {
+                            await SecureTokenStorage.deleteToken();
+                            final prefs = await SharedPreferences.getInstance();
+                            await prefs.remove('userId');
+                            if (!mounted) return;
                             Navigator.pushReplacement(
                               context,
                               MaterialPageRoute(

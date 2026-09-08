@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+
+import '../security/secure_token_storage.dart';
 
 class ApiClient {
   static const String _defaultLocalBaseUrl =
@@ -30,8 +31,7 @@ class ApiClient {
     dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {
-          final prefs = await SharedPreferences.getInstance();
-          final token = prefs.getString('token');
+          final token = await SecureTokenStorage.readToken();
 
           if (token != null && token.isNotEmpty) {
             options.headers['Authorization'] = 'Bearer $token';

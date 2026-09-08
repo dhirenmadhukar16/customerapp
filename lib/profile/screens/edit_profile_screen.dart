@@ -7,7 +7,8 @@ class EditProfileScreen extends StatefulWidget {
   final String customerId;
   final Map<String, dynamic> currentProfile;
 
-  const EditProfileScreen({super.key, required this.customerId, required this.currentProfile});
+  const EditProfileScreen(
+      {super.key, required this.customerId, required this.currentProfile});
 
   @override
   State<EditProfileScreen> createState() => _EditProfileScreenState();
@@ -24,11 +25,18 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   @override
   void initState() {
     super.initState();
-    nameController = TextEditingController(text: widget.currentProfile['name'] ?? widget.currentProfile['customerName'] ?? '');
-    emailController = TextEditingController(text: widget.currentProfile['email'] ?? '');
-    phoneController = TextEditingController(text: widget.currentProfile['phone'] ?? '');
-    whatsappController = TextEditingController(text: widget.currentProfile['whatsappNumber'] ?? '');
-    addressController = TextEditingController(text: widget.currentProfile['address'] ?? '');
+    nameController = TextEditingController(
+        text: widget.currentProfile['name'] ??
+            widget.currentProfile['customerName'] ??
+            '');
+    emailController =
+        TextEditingController(text: widget.currentProfile['email'] ?? '');
+    phoneController =
+        TextEditingController(text: widget.currentProfile['phone'] ?? '');
+    whatsappController = TextEditingController(
+        text: widget.currentProfile['whatsappNumber'] ?? '');
+    addressController =
+        TextEditingController(text: widget.currentProfile['address'] ?? '');
   }
 
   void saveProfile() async {
@@ -39,7 +47,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         data: {
           'name': nameController.text.trim(),
           'email': emailController.text.trim(),
-          'phone': phoneController.text.trim(),
           'whatsappNumber': whatsappController.text.trim(),
           'address': addressController.text.trim(),
         },
@@ -56,7 +63,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             msg = errData['message'];
           }
         }
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(msg)));
       }
     } finally {
       if (mounted) setState(() => loading = false);
@@ -78,7 +86,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             const SizedBox(height: 16),
             _field('Email', emailController, TextInputType.emailAddress),
             const SizedBox(height: 16),
-            _field('Phone Number', phoneController, TextInputType.phone),
+            _field('Phone Number', phoneController, TextInputType.phone, true),
             const SizedBox(height: 16),
             _field('WhatsApp Number', whatsappController, TextInputType.phone),
             const SizedBox(height: 16),
@@ -92,11 +100,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppTheme.primary,
                   foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16)),
                 ),
                 child: loading
                     ? const CircularProgressIndicator(color: Colors.white)
-                    : const Text('SAVE PROFILE', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                    : const Text('SAVE PROFILE',
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 16)),
               ),
             ),
           ],
@@ -105,20 +116,31 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     );
   }
 
-  Widget _field(String label, TextEditingController controller, [TextInputType keyboardType = TextInputType.text]) {
+  Widget _field(String label, TextEditingController controller,
+      [TextInputType keyboardType = TextInputType.text,
+      bool readOnly = false]) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.darkText)),
+        Text(label,
+            style: const TextStyle(
+                fontWeight: FontWeight.bold, color: AppTheme.darkText)),
         const SizedBox(height: 8),
         TextField(
           controller: controller,
           keyboardType: keyboardType,
+          readOnly: readOnly,
           decoration: InputDecoration(
             filled: true,
             fillColor: Colors.white,
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            helperText:
+                readOnly ? 'Phone changes require OTP verification' : null,
+            suffixIcon: readOnly ? const Icon(Icons.lock_outline) : null,
           ),
         ),
       ],

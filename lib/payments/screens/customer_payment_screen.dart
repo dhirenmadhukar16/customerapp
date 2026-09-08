@@ -119,7 +119,6 @@ class _CustomerPaymentScreenState extends State<CustomerPaymentScreen> {
 // 'phone': '9587581686',
           'productInfo': 'WhiteFox Order ${widget.orderNumber}',
           'country': 'India',
-          'mobile': true,
         },
       );
 

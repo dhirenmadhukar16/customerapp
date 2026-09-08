@@ -5,6 +5,7 @@ import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/network/api_client.dart';
+import '../../core/security/secure_token_storage.dart';
 import '../../navigation/customer_shell.dart';
 import 'customer_profile_setup_screen.dart';
 
@@ -109,7 +110,7 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
       final data = res.data;
       if (data['token'] != null) {
         final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('token', data['token']);
+        await SecureTokenStorage.saveToken(data['token'].toString());
         if (data['userId'] != null) {
           await prefs.setString('userId', data['userId']);
         }
@@ -179,7 +180,7 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
       final data = res.data;
       if (data['token'] != null) {
         final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('token', data['token']);
+        await SecureTokenStorage.saveToken(data['token'].toString());
         if (data['userId'] != null) {
           await prefs.setString('userId', data['userId']);
         }
