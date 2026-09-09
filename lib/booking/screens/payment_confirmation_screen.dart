@@ -32,6 +32,8 @@ class _PaymentConfirmationScreenState extends State<PaymentConfirmationScreen> {
 
   String? _bookingId;
   String? _merchantTransactionId;
+  String? _idempotencyKey;
+  double? _onlineAmount;
 
   @override
   void dispose() {
@@ -52,8 +54,8 @@ class _PaymentConfirmationScreenState extends State<PaymentConfirmationScreen> {
         fallbackName: widget.bookingData['firstName'] ??
             widget.bookingData['customerName'],
         fallbackEmail: widget.bookingData['email'],
-        fallbackPhone: widget.bookingData['phone'] ??
-            widget.bookingData['customerPhone'],
+        fallbackPhone:
+            widget.bookingData['phone'] ?? widget.bookingData['customerPhone'],
       );
       if (!_isPaymentProfileComplete(paymentProfile)) {
         if (mounted) setState(() => _loading = false);
@@ -96,6 +98,7 @@ class _PaymentConfirmationScreenState extends State<PaymentConfirmationScreen> {
           setState(() => _loading = false);
         }
 
+        CartService.instance.clear();
         _showSuccessDialog();
         return;
       }
@@ -112,8 +115,9 @@ class _PaymentConfirmationScreenState extends State<PaymentConfirmationScreen> {
       // 4. CREATE EASEBUZZ PAYMENT
       // --------------------------------------------------------
 
-      final idempotencyKey =
+      _idempotencyKey ??=
           'WF-${_bookingId}-${DateTime.now().millisecondsSinceEpoch}';
+      _onlineAmount = amountToPay;
 
       final paymentResponse = await ApiClient.dio.post(
         '/api/payments/online/initiate',
@@ -122,7 +126,7 @@ class _PaymentConfirmationScreenState extends State<PaymentConfirmationScreen> {
           'orderId': null,
           'amount': amountToPay,
           'paymentMode': _selectedPaymentMode,
-          'idempotencyKey': idempotencyKey,
+          'idempotencyKey': _idempotencyKey,
 
           // Customer information
           'firstName': paymentProfile['name'],
@@ -140,8 +144,6 @@ class _PaymentConfirmationScreenState extends State<PaymentConfirmationScreen> {
           'zipcode': widget.bookingData['zipcode'] ??
               widget.bookingData['pincode'] ??
               '',
-
-          'mobile': true,
         },
       );
 
@@ -207,6 +209,10 @@ class _PaymentConfirmationScreenState extends State<PaymentConfirmationScreen> {
       }
 
       await _openEasebuzzCheckout(checkoutUrl);
+
+      if (mounted) {
+        await _showPaymentVerificationDialog();
+      }
     } catch (e) {
       if (mounted) {
         setState(() => _loading = false);
@@ -243,6 +249,138 @@ class _PaymentConfirmationScreenState extends State<PaymentConfirmationScreen> {
         'Unable to open Easebuzz payment page.',
       );
     }
+  }
+
+  // ============================================================
+  // VERIFY EASEBUZZ PAYMENT WITH THE BACKEND
+  // ============================================================
+
+  Future<String> _verifyOnlinePayment() async {
+    if (_bookingId == null ||
+        _merchantTransactionId == null ||
+        _merchantTransactionId!.isEmpty ||
+        _idempotencyKey == null ||
+        _onlineAmount == null) {
+      throw Exception('Payment information is incomplete. Please try again.');
+    }
+
+    final response = await ApiClient.dio.post(
+      '/api/payments/online/verify',
+      data: {
+        'orderId': null,
+        'bookingId': _bookingId,
+        'merchantTransactionId': _merchantTransactionId,
+        'gatewayTransactionId': null,
+        'gatewayStatus': null,
+        'amount': _onlineAmount!.toStringAsFixed(2),
+        'paymentMode': _selectedPaymentMode,
+        'idempotencyKey': _idempotencyKey,
+      },
+    );
+
+    final data = Map<String, dynamic>.from(response.data as Map);
+    return data['status']?.toString().toUpperCase() ?? 'PENDING';
+  }
+
+  Future<void> _showPaymentVerificationDialog() async {
+    if (!mounted) return;
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        bool verifying = false;
+        String? verificationError;
+
+        return StatefulBuilder(
+          builder: (dialogContext, setDialogState) {
+            Future<void> verify() async {
+              if (verifying) return;
+
+              setDialogState(() {
+                verifying = true;
+                verificationError = null;
+              });
+
+              try {
+                final status = await _verifyOnlinePayment();
+                if (!dialogContext.mounted || !mounted) return;
+
+                if (status == 'SUCCESS') {
+                  CartService.instance.clear();
+                  Navigator.pop(dialogContext);
+                  _showSuccessDialog();
+                  return;
+                }
+
+                setDialogState(() {
+                  verifying = false;
+                  verificationError = status == 'FAILED'
+                      ? 'Payment failed. Please retry the payment.'
+                      : 'Payment is still pending. Complete the payment and check again.';
+                });
+              } catch (e) {
+                if (!dialogContext.mounted) return;
+                setDialogState(() {
+                  verifying = false;
+                  verificationError =
+                      _errorText(e).replaceFirst('Exception: ', '').trim();
+                });
+              }
+            }
+
+            return AlertDialog(
+              icon: const Icon(
+                Icons.verified_user_outlined,
+                color: AppTheme.primary,
+                size: 48,
+              ),
+              title: const Text('Verify Payment'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'After completing payment in Easebuzz, return here and verify your payment.',
+                    textAlign: TextAlign.center,
+                  ),
+                  if (verificationError != null) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      verificationError!,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: Colors.red),
+                    ),
+                  ],
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed:
+                      verifying ? null : () => Navigator.pop(dialogContext),
+                  child: const Text('Check Later'),
+                ),
+                ElevatedButton.icon(
+                  onPressed: verifying ? null : verify,
+                  icon: verifying
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(Icons.verified_rounded),
+                  label: Text(
+                    verifying ? 'Verifying...' : 'I Paid - Verify',
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 
   // ============================================================
@@ -288,11 +426,14 @@ class _PaymentConfirmationScreenState extends State<PaymentConfirmationScreen> {
       );
       if (response.data is Map) {
         final profile = response.data as Map;
-        result['name'] = (profile['name'] ?? profile['customerName'] ?? result['name'])
-            .toString()
-            .trim();
-        result['email'] = (profile['email'] ?? result['email']).toString().trim();
-        result['phone'] = (profile['phone'] ?? result['phone']).toString().trim();
+        result['name'] =
+            (profile['name'] ?? profile['customerName'] ?? result['name'])
+                .toString()
+                .trim();
+        result['email'] =
+            (profile['email'] ?? result['email']).toString().trim();
+        result['phone'] =
+            (profile['phone'] ?? result['phone']).toString().trim();
       }
     } catch (_) {
       // The supplied booking values remain available as a fallback.
@@ -324,7 +465,8 @@ class _PaymentConfirmationScreenState extends State<PaymentConfirmationScreen> {
     await showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        icon: const Icon(Icons.person_outline, color: AppTheme.primary, size: 48),
+        icon:
+            const Icon(Icons.person_outline, color: AppTheme.primary, size: 48),
         title: const Text('Complete your profile'),
         content: const Text(
           'Please complete your name, email address and phone number for seamless services and secure payments from WhiteFox.',
@@ -340,7 +482,8 @@ class _PaymentConfirmationScreenState extends State<PaymentConfirmationScreen> {
               Navigator.pop(dialogContext);
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const CustomerProfileScreen()),
+                MaterialPageRoute(
+                    builder: (_) => const CustomerProfileScreen()),
               );
             },
             child: const Text('Complete Profile'),
@@ -390,8 +533,6 @@ class _PaymentConfirmationScreenState extends State<PaymentConfirmationScreen> {
             width: double.infinity,
             child: ElevatedButton(
               onPressed: () {
-                CartService.instance.clear();
-
                 Navigator.pop(context);
 
                 Navigator.pushAndRemoveUntil(
