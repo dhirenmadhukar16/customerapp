@@ -1,46 +1,78 @@
-# Flutter wrapper
--keep class io.flutter.app.** { *; }
--keep class io.flutter.plugin.** { *; }
--keep class io.flutter.util.** { *; }
--keep class io.flutter.view.** { *; }
--keep class io.flutter.** { *; }
--keep class io.flutter.plugins.** { *; }
+# =========================================================
+# REQUIRED CLASS METADATA
+# =========================================================
 
-# Keep application classes
--keep class com.example.whitefox_customer_app.** { *; }
+-keepattributes *Annotation*
+-keepattributes Signature
+-keepattributes InnerClasses
+-keepattributes EnclosingMethod
 
-# Dio / OkHttp
--keep class okhttp3.** { *; }
--keep interface okhttp3.** { *; }
+
+# =========================================================
+# FLUTTER
+# Flutter and plugins normally provide their own R8 rules.
+# Do not keep every Flutter class because it disables shrinking.
+# =========================================================
+
+-dontwarn io.flutter.embedding.**
+-dontwarn io.flutter.plugins.**
+
+
+# =========================================================
+# DIO / OKHTTP / OKIO
+# Dio itself is implemented in Dart.
+# Avoid blanket keep rules for OkHttp.
+# =========================================================
+
 -dontwarn okhttp3.**
 -dontwarn okio.**
-
-# Stomp / WebSocket
--keep class ua.naiksoftware.stomp.** { *; }
--dontwarn ua.naiksoftware.stomp.**
-
-# Google Play Core (Flutter deferred components - suppress missing class errors)
--dontwarn com.google.android.play.core.splitcompat.SplitCompatApplication
--dontwarn com.google.android.play.core.splitinstall.**
--dontwarn com.google.android.play.core.tasks.**
--keep class com.google.android.play.core.splitcompat.** { *; }
--keep class com.google.android.play.core.splitinstall.** { *; }
--keep class com.google.android.play.core.tasks.** { *; }
-
-# General rules
--keepattributes *Annotation*
--keepattributes SourceFile,LineNumberTable
 -dontwarn javax.annotation.**
--dontwarn com.google.android.play.core.**
 
-# Razorpay Rules
+
+# =========================================================
+# WEBVIEW JAVASCRIPT BRIDGE
+# Required when payment/webview integrations expose methods
+# through @JavascriptInterface.
+# =========================================================
+
 -keepclassmembers class * {
     @android.webkit.JavascriptInterface <methods>;
 }
+
 -keepattributes JavascriptInterface
--keepattributes *Annotation*
+
+
+# =========================================================
+# RAZORPAY
+# Keep this only if Razorpay SDK is still included and used.
+# =========================================================
+
 -dontwarn com.razorpay.**
--keep class com.razorpay.** {*;}
+-keep class com.razorpay.** { *; }
+
+
+# =========================================================
+# GOOGLE PLAY CORE
+# Suppress optional deferred-component warnings.
+# Do not keep every Play Core class.
+# =========================================================
+
+-dontwarn com.google.android.play.core.**
+-dontwarn com.google.android.play.core.splitcompat.SplitCompatApplication
+
+
+# =========================================================
+# HTML/PDF SUPPORT
+# =========================================================
 
 -dontwarn org.ccil.cowan.tagsoup.**
 
+
+# =========================================================
+# ENUMS USED THROUGH REFLECTION
+# =========================================================
+
+-keepclassmembers enum * {
+    public static **[] values();
+    public static ** valueOf(java.lang.String);
+}

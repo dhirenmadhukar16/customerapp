@@ -21,6 +21,7 @@ android {
         versionCode = flutter.versionCode
         versionName = flutter.versionName
         multiDexEnabled = true
+
         manifestPlaceholders["GOOGLE_MAPS_API_KEY"] =
             (project.findProperty("GOOGLE_MAPS_API_KEY") as String?)
                 ?: System.getenv("GOOGLE_MAPS_API_KEY")
@@ -29,10 +30,19 @@ android {
 
     buildTypes {
         release {
+            // Replace this with the release keystore before Play Store release.
             signingConfig = signingConfigs.getByName("debug")
-            isMinifyEnabled = false
-            isShrinkResources = false
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+
+            // Remove unused Java/Kotlin code.
+            isMinifyEnabled = true
+
+            // Remove unused Android resources.
+            isShrinkResources = true
+
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
         }
     }
 }
@@ -41,8 +51,11 @@ flutter {
     source = "../.."
 }
 
-
-
-
-tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach { compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17) } }
-
+tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>()
+    .configureEach {
+        compilerOptions {
+            jvmTarget.set(
+                org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
+            )
+        }
+    }
