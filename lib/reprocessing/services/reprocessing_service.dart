@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'dart:typed_data';
 import '../models/reprocessing.dart';
 import '../../core/network/api_client.dart';
 
@@ -73,13 +74,30 @@ class ReprocessingService {
         data: request.toJson(),
       );
 
-      if (response.statusCode == 200) {
+      if (response.statusCode == 200 || response.statusCode == 201) {
         return Reprocessing.fromJson(response.data);
       }
       throw Exception('Failed to create reprocessing request');
     } on DioException catch (e) {
       throw Exception('Error: ${e.message}');
     }
+  }
+
+  static Future<void> uploadReprocessingPhoto({
+    required String customerId,
+    required String reprocessingId,
+    required Uint8List fileBytes,
+    required String fileName,
+  }) async {
+    final formData = FormData.fromMap({
+      'file': MultipartFile.fromBytes(fileBytes, filename: fileName),
+    });
+
+    await ApiClient.dio.post(
+      '$_baseUrl/$customerId/complaints/$reprocessingId/attachments',
+      data: formData,
+      options: Options(contentType: 'multipart/form-data'),
+    );
   }
 
   /// Get all reprocessing requests for a specific store

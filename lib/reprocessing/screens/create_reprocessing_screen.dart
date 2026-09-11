@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import '../models/reprocessing.dart';
 import '../services/reprocessing_service.dart';
 
@@ -37,6 +38,16 @@ class _CreateReprocessingScreenState extends State<CreateReprocessingScreen> {
   String _selectedCategory = 'POOR_WASHING';
   String _selectedPriority = 'LOW';
   bool _isLoading = false;
+  XFile? _photo;
+
+  Future<void> _pickPhoto() async {
+    final photo = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 75,
+      maxWidth: 1600,
+    );
+    if (photo != null && mounted) setState(() => _photo = photo);
+  }
 
   final List<String> _categories = [
     'POOR_WASHING',
@@ -70,6 +81,13 @@ class _CreateReprocessingScreenState extends State<CreateReprocessingScreen> {
       return;
     }
 
+    if (_photo == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please upload a garment photo.')),
+      );
+      return;
+    }
+
     setState(() => _isLoading = true);
 
     try {
@@ -92,6 +110,15 @@ class _CreateReprocessingScreenState extends State<CreateReprocessingScreen> {
         widget.customerId,
         request,
       );
+
+      if (_photo != null) {
+        await ReprocessingService.uploadReprocessingPhoto(
+          customerId: widget.customerId,
+          reprocessingId: reprocessing.id,
+          fileBytes: await _photo!.readAsBytes(),
+          fileName: _photo!.name,
+        );
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -136,6 +163,29 @@ class _CreateReprocessingScreenState extends State<CreateReprocessingScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF8E1),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFFFC107)),
+                ),
+                child: const Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.info_outline, color: Color(0xFFF57C00)),
+                    SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Reprocessing requests are accepted only within 7 days of the delivery date.',
+                        style: TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
               // Order ID field
               Text(
                 'Order UUID *',
@@ -287,6 +337,27 @@ class _CreateReprocessingScreenState extends State<CreateReprocessingScreen> {
                 },
               ),
               const SizedBox(height: 32),
+
+              Text(
+                'Garment photo *',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+              ),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: _isLoading ? null : _pickPhoto,
+                icon: const Icon(Icons.add_a_photo_outlined),
+                label: Text(_photo == null ? 'Upload photo' : _photo!.name),
+              ),
+              if (_photo != null)
+                TextButton.icon(
+                  onPressed:
+                      _isLoading ? null : () => setState(() => _photo = null),
+                  icon: const Icon(Icons.close),
+                  label: const Text('Remove photo'),
+                ),
+              const SizedBox(height: 20),
 
               // Submit button
               SizedBox(
