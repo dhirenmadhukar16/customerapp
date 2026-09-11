@@ -43,12 +43,13 @@ flutter:
     - assets/images/
 
 flutter_launcher_icons:
-  android: true
+  android: "ic_launcher"
   ios: true
   image_path: "assets/images/whitefox_app_icon.png"
   min_sdk_android: 21
   remove_alpha_ios: true
-
+  adaptive_icon_background: "#052E22"
+  adaptive_icon_foreground: "assets/images/whitefox_app_icon.png"
   web:
     generate: true
     image_path: "assets/images/whitefox_app_icon.png"
