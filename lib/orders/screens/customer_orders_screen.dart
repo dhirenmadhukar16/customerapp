@@ -794,7 +794,11 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> {
         builder: (_) => CustomerPaymentScreen(
           orderId: o['id']?.toString() ?? o['orderId']?.toString() ?? '',
           orderNumber: o['orderNumber']?.toString() ?? 'Order',
-          totalAmount: (o['totalAmount'] ?? 0).toDouble(),
+          // For PARTIAL/UNPAID orders the customer must pay only the
+          // server-calculated outstanding balance, never the complete total.
+          totalAmount:
+              (o['remainingAmount'] ?? o['totalAmount'] ?? 0).toDouble(),
+          customerPhone: o['customerPhone']?.toString(),
         ),
       ),
     );

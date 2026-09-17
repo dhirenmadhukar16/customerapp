@@ -129,9 +129,12 @@ class _PickupBillApprovalScreenState extends State<PickupBillApprovalScreen> {
 
   Widget _buildContent() {
     final items = List.from(bill!['items'] ?? []);
-    final total = bill!['totalAmount'] ?? 0.0;
-    final subtotal = bill!['subtotal'] ?? 0.0;
-    final gst = bill!['gst'] ?? 0.0;
+    final total = (bill!['totalAmount'] ?? 0).toDouble();
+    final subtotal = (bill!['subtotal'] ?? 0).toDouble();
+    final gst = (bill!['gst'] ?? 0).toDouble();
+    final paid = (bill!['paidAmount'] ?? 0).toDouble();
+    final remaining = (bill!['remainingAmount'] ?? total).toDouble();
+    final excessCredit = (bill!['excessCreditAmount'] ?? 0).toDouble();
 
     return Column(
       children: [
@@ -274,6 +277,35 @@ class _PickupBillApprovalScreenState extends State<PickupBillApprovalScreen> {
                   const Text('Subtotal:', style: TextStyle(color: Colors.grey)),
                   Text('₹${subtotal.toStringAsFixed(2)}',
                       style: const TextStyle(color: Colors.grey)),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Already paid:',
+                      style: TextStyle(color: Colors.grey)),
+                  Text('₹${paid.toStringAsFixed(2)}',
+                      style: const TextStyle(fontWeight: FontWeight.w700)),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                      excessCredit > 0
+                          ? 'Credit to receive:'
+                          : 'Balance payable:',
+                      style: const TextStyle(fontWeight: FontWeight.bold)),
+                  Text(
+                    '₹${(excessCredit > 0 ? excessCredit : remaining).toStringAsFixed(2)}',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w900,
+                      fontSize: 18,
+                      color: excessCredit > 0 ? Colors.green : Colors.orange,
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 4),

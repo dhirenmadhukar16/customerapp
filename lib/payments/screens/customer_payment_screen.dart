@@ -30,15 +30,13 @@ class CustomerPaymentScreen extends StatefulWidget {
 class _CustomerPaymentScreenState extends State<CustomerPaymentScreen> {
   bool loading = false;
 
-  String selectedMode = 'CASH_ON_DELIVERY';
+  String selectedMode = 'FULL_ONLINE';
 
   String? merchantTransactionId;
 
   double get payableAmount {
-    if (selectedMode == 'HALF_ADVANCE') {
-      return widget.totalAmount / 2;
-    }
-
+    // widget.totalAmount is the server-provided remaining balance for an
+    // existing order. Partial advance must not be applied a second time.
     return widget.totalAmount;
   }
 
@@ -395,7 +393,7 @@ class _CustomerPaymentScreenState extends State<CustomerPaymentScreen> {
                 widget.orderNumber,
               ),
               subtitle: const Text(
-                'Choose payment option',
+                'Outstanding balance',
               ),
               trailing: Text(
                 '₹${widget.totalAmount.toStringAsFixed(2)}',
@@ -411,13 +409,8 @@ class _CustomerPaymentScreenState extends State<CustomerPaymentScreen> {
           ),
           paymentOption(
             'FULL_ONLINE',
-            'Pay Full Online',
-            'Pay full amount using UPI / card / net banking.',
-          ),
-          paymentOption(
-            'HALF_ADVANCE',
-            'Pay 50% Advance',
-            'Pay half now and remaining at delivery.',
+            'Pay Balance Online',
+            'Pay the outstanding amount using UPI / card / net banking.',
           ),
           paymentOption(
             'CASH_ON_DELIVERY',

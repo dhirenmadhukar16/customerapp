@@ -29,17 +29,15 @@ class _ServicesScreenState extends State<ServicesScreen> {
   @override
   void initState() {
     super.initState();
-    loadServices();
-    _checkStore();
+    _initializeServices();
     CartService.instance.addListener(_onCartChanged);
   }
 
-  Future<void> _checkStore() async {
+  Future<void> _initializeServices() async {
     final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      final storeId = prefs.getString('customer_store_id');
-      storeAvailable = storeId != null && storeId.isNotEmpty;
-    });
+    final storeId = prefs.getString('customer_store_id');
+    storeAvailable = storeId != null && storeId.isNotEmpty;
+    await loadServices(storeId: storeId);
   }
 
   void _onCartChanged() {
@@ -52,7 +50,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
     super.dispose();
   }
 
-  Future<void> loadServices() async {
+  Future<void> loadServices({String? storeId}) async {
     try {
       setState(() {
         loading = true;
@@ -61,7 +59,12 @@ class _ServicesScreenState extends State<ServicesScreen> {
 
       final responses = await Future.wait<dynamic>([
         ApiClient.dio
-            .get('/api/customer-app/services')
+            .get(
+              '/api/customer-app/services',
+              queryParameters: storeId != null && storeId.isNotEmpty
+                  ? {'storeId': storeId}
+                  : null,
+            )
             .then((response) => response.data),
         ApiClient.dio
             .get('/api/customer-app/packages')
@@ -171,7 +174,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
                   Navigator.pop(context);
                 },
                 title: Text(v['variantName']),
-                trailing: Text('₹',
+                trailing: Text('₹${v['price'] ?? service['price'] ?? 0}',
                     style: const TextStyle(
                         fontWeight: FontWeight.bold, color: AppTheme.primary)),
               );
@@ -502,7 +505,8 @@ class _ServicesScreenState extends State<ServicesScreen> {
   }
 
   Widget _packageCard(Map<String, dynamic> package) {
-    final items = package['items'] is List ? package['items'] as List : const [];
+    final items =
+        package['items'] is List ? package['items'] as List : const [];
     final price = _asDouble(package['price']);
     final catalogueValue = _asDouble(package['catalogueValue']);
     final savings = _asDouble(package['savingsAmount']);
@@ -636,7 +640,8 @@ class _ServicesScreenState extends State<ServicesScreen> {
   }
 
   void _showPackageDetails(Map<String, dynamic> package) {
-    final items = package['items'] is List ? package['items'] as List : const [];
+    final items =
+        package['items'] is List ? package['items'] as List : const [];
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -702,8 +707,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
                   trailing: Text(
                     '${item['quantity'] ?? 1}×',
                     style: const TextStyle(
-                        color: AppTheme.primary,
-                        fontWeight: FontWeight.w900),
+                        color: AppTheme.primary, fontWeight: FontWeight.w900),
                   ),
                 );
               }),
@@ -754,8 +758,18 @@ class _ServicesScreenState extends State<ServicesScreen> {
     final date = DateTime.tryParse(value?.toString() ?? '');
     if (date == null) return value?.toString() ?? '-';
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec'
     ];
     return '${date.day.toString().padLeft(2, '0')} ${months[date.month - 1]} ${date.year}';
   }

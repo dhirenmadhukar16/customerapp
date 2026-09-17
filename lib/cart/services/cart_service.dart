@@ -5,24 +5,58 @@ class CartService extends ChangeNotifier {
   CartService._();
 
   final Map<String, int> quantities = {};
-  List<dynamic> allServices = []; 
+  List<dynamic> allServices = [];
   // map from uniqueId (catalogId_variantName) to the variant data
   final Map<String, Map<String, dynamic>> _addedItems = {};
 
   void setServices(List<dynamic> services) {
-    if (allServices.isEmpty) {
-      allServices = services;
+    // Always replace the cache. Prices can differ by the customer's nearest store.
+    allServices = List<dynamic>.from(services);
+
+    // Refresh prices already present in the cart so an old global/store price
+    // cannot survive after the nearest store catalogue is reloaded.
+    for (final entry in _addedItems.entries) {
+      final item = entry.value;
+      final catalogId = item['catalogId']?.toString();
+      final variantName = item['variantName']?.toString() ?? 'Standard';
+
+      Map<String, dynamic>? matchingService;
+      for (final rawService in services) {
+        if (rawService is Map && rawService['id']?.toString() == catalogId) {
+          matchingService = Map<String, dynamic>.from(rawService);
+          break;
+        }
+      }
+      if (matchingService == null) continue;
+
+      num? effectivePrice;
+      final variants = matchingService['variants'];
+      if (variants is List) {
+        for (final rawVariant in variants) {
+          if (rawVariant is Map &&
+              rawVariant['variantName']?.toString().toLowerCase() ==
+                  variantName.toLowerCase()) {
+            effectivePrice = rawVariant['price'] as num?;
+            break;
+          }
+        }
+      }
+      effectivePrice ??= matchingService['price'] as num?;
+      item['price'] = (effectivePrice ?? 0).toDouble();
     }
+    notifyListeners();
   }
 
-  void addVariant(String catalogId, Map<String, dynamic> service, Map<String, dynamic> variant) {
+  void addVariant(String catalogId, Map<String, dynamic> service,
+      Map<String, dynamic> variant) {
     String variantName = variant['variantName'] ?? 'Standard';
     String id = '${catalogId}_$variantName';
-    
+
     if (!_addedItems.containsKey(id)) {
       _addedItems[id] = {
         'catalogId': catalogId,
-        'serviceType': service['serviceType'] ?? service['categoryName'] ?? 'Misc',
+        'serviceType':
+            service['serviceType'] ?? service['categoryName'] ?? 'Misc',
         'itemName': service['itemName'],
         'variantName': variantName,
         'price': variant['price'] ?? service['price'] ?? 0.0,
@@ -87,4 +121,3 @@ class CartService extends ChangeNotifier {
     notifyListeners();
   }
 }
-

@@ -117,8 +117,6 @@ class _PaymentConfirmationScreenState extends State<PaymentConfirmationScreen> {
 
       _idempotencyKey ??=
           'WF-${_bookingId}-${DateTime.now().millisecondsSinceEpoch}';
-      _onlineAmount = amountToPay;
-
       final paymentResponse = await ApiClient.dio.post(
         '/api/payments/online/initiate',
         data: {
@@ -148,6 +146,18 @@ class _PaymentConfirmationScreenState extends State<PaymentConfirmationScreen> {
       );
 
       final data = Map<String, dynamic>.from(paymentResponse.data);
+
+      // The backend recalculates the authoritative payable amount using the
+      // stored booking, GST, discount and payment mode. Keep exactly that
+      // amount for verification instead of the local cart estimate.
+      final serverAmount = data['amount'];
+      _onlineAmount = serverAmount is num
+          ? serverAmount.toDouble()
+          : double.tryParse(serverAmount?.toString() ?? '');
+
+      if (_onlineAmount == null || _onlineAmount! <= 0) {
+        throw Exception('Backend did not return a valid payment amount.');
+      }
 
       // --------------------------------------------------------
       // 5. READ WHITEFOX PAYMENT RESPONSE
@@ -272,6 +282,8 @@ class _PaymentConfirmationScreenState extends State<PaymentConfirmationScreen> {
         'merchantTransactionId': _merchantTransactionId,
         'gatewayTransactionId': null,
         'gatewayStatus': null,
+        // Informational only. Backend verification restores the amount from
+        // PaymentAttempt and does not trust a client-calculated value.
         'amount': _onlineAmount!.toStringAsFixed(2),
         'paymentMode': _selectedPaymentMode,
         'idempotencyKey': _idempotencyKey,
