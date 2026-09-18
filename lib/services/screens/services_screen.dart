@@ -212,7 +212,6 @@ class _ServicesScreenState extends State<ServicesScreen> {
   @override
   Widget build(BuildContext context) {
     final cart = CartService.instance;
-    double total = cart.total;
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -274,44 +273,59 @@ class _ServicesScreenState extends State<ServicesScreen> {
                               : _buildServicesList(selectedMainCategory!),
                     ),
 
-                    // Cart Summary Bottom Sheet
+                    // Compact cart bar keeps most of the screen available
+                    // for the catalogue grid.
                     if (cart.totalItems > 0)
                       Container(
-                        padding: const EdgeInsets.all(22),
+                        padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
                         decoration: BoxDecoration(
                           color: Colors.white,
                           borderRadius: const BorderRadius.vertical(
-                              top: Radius.circular(30)),
+                              top: Radius.circular(22)),
                           boxShadow: [
                             BoxShadow(
                                 color: Colors.black.withValues(alpha: 0.05),
-                                blurRadius: 20,
+                                blurRadius: 14,
                                 offset: const Offset(0, -4))
                           ],
                         ),
-                        child: Column(
+                        child: Row(
                           children: [
-                            _row('Items', '${cart.totalItems}'),
-                            _row('Subtotal',
-                                '₹${cart.subtotal.toStringAsFixed(2)}'),
-                            _row('GST 18%', '₹${cart.gst.toStringAsFixed(2)}'),
-                            const SizedBox(height: 10),
-                            const Divider(),
-                            const SizedBox(height: 10),
-                            _row('Total', '₹${cart.total.toStringAsFixed(2)}',
-                                bold: true),
-                            const SizedBox(height: 20),
+                            Expanded(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '${cart.totalItems} item${cart.totalItems == 1 ? '' : 's'}',
+                                    style: const TextStyle(
+                                      color: AppTheme.mutedText,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    '₹${cart.total.toStringAsFixed(2)}',
+                                    style: const TextStyle(
+                                      color: AppTheme.navy,
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                             SizedBox(
-                              width: double.infinity,
-                              height: 55,
+                              height: 44,
                               child: ElevatedButton(
                                 onPressed: continueToBooking,
                                 child: const Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    Text('Continue to Pickup Booking'),
-                                    SizedBox(width: 8),
-                                    Icon(Icons.arrow_forward, size: 20)
+                                    Text('View cart'),
+                                    SizedBox(width: 6),
+                                    Icon(Icons.arrow_forward, size: 18),
                                   ],
                                 ),
                               ),
@@ -342,7 +356,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
     }
 
     return ListView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 16),
       itemCount: grouped.keys.length,
       itemBuilder: (context, index) {
         final subCatName = grouped.keys.elementAt(index);
@@ -352,94 +366,172 @@ class _ServicesScreenState extends State<ServicesScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Padding(
-              padding: const EdgeInsets.symmetric(vertical: 16),
+              padding: const EdgeInsets.fromLTRB(4, 10, 4, 8),
               child: Text(subCatName,
                   style: const TextStyle(
-                      fontSize: 18,
+                      fontSize: 15,
                       fontWeight: FontWeight.bold,
                       color: AppTheme.navy)),
             ),
-            ...items.map((s) {
-              final qty = getServiceQuantity(s['id'].toString());
-              final img = getItemImage(s['itemName'] ?? '', s['thumbnailUrl']);
-              final variants = s['variants'] as List<dynamic>? ?? [];
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final columns = constraints.maxWidth >= 700
+                    ? 5
+                    : constraints.maxWidth >= 500
+                        ? 4
+                        : 3;
 
-              return Container(
-                margin: const EdgeInsets.only(bottom: 16),
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: AppTheme.softShadow),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 60,
-                      height: 60,
-                      decoration: BoxDecoration(
-                        color: AppTheme.primary.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(15),
-                        image: DecorationImage(
-                          image: img.startsWith('http')
-                              ? NetworkImage(img) as ImageProvider
-                              : AssetImage(img),
-                          fit: BoxFit.cover,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(s['itemName'] ?? 'Service',
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.w900, fontSize: 15)),
-                          const SizedBox(height: 2),
-                          Text(
-                              variants.isNotEmpty
-                                  ? 'From ₹${variants.first['price'] ?? 0.0}'
-                                  : '₹${s['price'] ?? 0.0}',
-                              style: const TextStyle(
-                                  color: AppTheme.primary,
-                                  fontWeight: FontWeight.w900,
-                                  fontSize: 13)),
-                        ],
-                      ),
-                    ),
-                    Row(
-                      children: [
-                        IconButton(
-                          onPressed: qty == 0
-                              ? null
-                              : () =>
-                                  removeServiceAnyVariant(s['id'].toString()),
-                          icon: Icon(Icons.remove_circle_outline,
-                              color: qty > 0
-                                  ? AppTheme.darkText
-                                  : Colors.grey.shade400),
-                        ),
-                        SizedBox(
-                            width: 20,
-                            child: Text(qty == 0 ? '' : '',
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w900))),
-                        IconButton(
-                          onPressed: () => _showVariantSelection(s),
-                          icon: const Icon(Icons.add_circle,
-                              color: AppTheme.primary),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              );
-            }),
+                return GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: items.length,
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: columns,
+                    crossAxisSpacing: 8,
+                    mainAxisSpacing: 8,
+                    childAspectRatio: 0.72,
+                  ),
+                  itemBuilder: (context, itemIndex) {
+                    return _buildCompactServiceCard(
+                      Map<String, dynamic>.from(items[itemIndex] as Map),
+                    );
+                  },
+                );
+              },
+            ),
+            const SizedBox(height: 8),
           ],
         );
       },
+    );
+  }
+
+  Widget _buildCompactServiceCard(Map<String, dynamic> service) {
+    final catalogId = service['id'].toString();
+    final qty = getServiceQuantity(catalogId);
+    final variants = service['variants'] as List<dynamic>? ?? [];
+    final img = getItemImage(
+      service['itemName']?.toString() ?? '',
+      service['thumbnailUrl']?.toString(),
+    );
+    final price = variants.isNotEmpty
+        ? variants.first['price'] ?? service['price'] ?? 0
+        : service['price'] ?? 0;
+
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(14),
+      elevation: 1,
+      shadowColor: Colors.black.withValues(alpha: 0.10),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => _showVariantSelection(service),
+        child: Padding(
+          padding: const EdgeInsets.all(7),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: AppTheme.primary.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(10),
+                    image: DecorationImage(
+                      image: img.startsWith('http')
+                          ? NetworkImage(img) as ImageProvider
+                          : AssetImage(img),
+                      fit: BoxFit.contain,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                service['itemName']?.toString() ?? 'Service',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w800,
+                  color: AppTheme.navy,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                '${variants.isNotEmpty ? 'From ' : ''}₹$price',
+                maxLines: 1,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 10.5,
+                  color: AppTheme.primary,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 5),
+              if (qty == 0)
+                SizedBox(
+                  height: 28,
+                  child: OutlinedButton(
+                    onPressed: () => _showVariantSelection(service),
+                    style: OutlinedButton.styleFrom(
+                      padding: EdgeInsets.zero,
+                      side: const BorderSide(color: AppTheme.primary),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: const Text(
+                      'ADD',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                )
+              else
+                Container(
+                  height: 28,
+                  decoration: BoxDecoration(
+                    color: AppTheme.primary.withValues(alpha: 0.09),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      InkWell(
+                        onTap: () => removeServiceAnyVariant(catalogId),
+                        child: const Padding(
+                          padding: EdgeInsets.all(4),
+                          child: Icon(Icons.remove, size: 15),
+                        ),
+                      ),
+                      Text(
+                        '$qty',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      InkWell(
+                        onTap: () => _showVariantSelection(service),
+                        child: const Padding(
+                          padding: EdgeInsets.all(4),
+                          child: Icon(
+                            Icons.add,
+                            size: 15,
+                            color: AppTheme.primary,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -505,8 +597,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
   }
 
   Widget _packageCard(Map<String, dynamic> package) {
-    final items =
-        package['items'] is List ? package['items'] as List : const [];
+    final items = package['items'] is List ? package['items'] as List : const [];
     final price = _asDouble(package['price']);
     final catalogueValue = _asDouble(package['catalogueValue']);
     final savings = _asDouble(package['savingsAmount']);
@@ -640,8 +731,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
   }
 
   void _showPackageDetails(Map<String, dynamic> package) {
-    final items =
-        package['items'] is List ? package['items'] as List : const [];
+    final items = package['items'] is List ? package['items'] as List : const [];
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -707,7 +797,8 @@ class _ServicesScreenState extends State<ServicesScreen> {
                   trailing: Text(
                     '${item['quantity'] ?? 1}×',
                     style: const TextStyle(
-                        color: AppTheme.primary, fontWeight: FontWeight.w900),
+                        color: AppTheme.primary,
+                        fontWeight: FontWeight.w900),
                   ),
                 );
               }),
@@ -758,39 +849,10 @@ class _ServicesScreenState extends State<ServicesScreen> {
     final date = DateTime.tryParse(value?.toString() ?? '');
     if (date == null) return value?.toString() ?? '-';
     const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec'
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
     ];
     return '${date.day.toString().padLeft(2, '0')} ${months[date.month - 1]} ${date.year}';
   }
 
-  Widget _row(String title, String value, {bool bold = false}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        children: [
-          Text(title,
-              style: TextStyle(
-                  color: bold ? AppTheme.darkText : AppTheme.mutedText,
-                  fontWeight: bold ? FontWeight.w900 : FontWeight.w600)),
-          const Spacer(),
-          Text(value,
-              style: TextStyle(
-                  fontWeight: bold ? FontWeight.w900 : FontWeight.w600,
-                  fontSize: bold ? 18 : 14,
-                  color: bold ? AppTheme.primary : AppTheme.darkText)),
-        ],
-      ),
-    );
-  }
 }
