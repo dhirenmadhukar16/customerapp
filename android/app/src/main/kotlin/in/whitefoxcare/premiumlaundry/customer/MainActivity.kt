@@ -1,4 +1,4 @@
-package in.whitefoxcare.premiumlaundry.customer
+package `in`.whitefoxcare.premiumlaundry.customer
 
 import io.flutter.embedding.android.FlutterActivity
 
