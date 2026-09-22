@@ -1,7 +1,19 @@
+import java.util.Properties
+import java.io.FileInputStream
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("dev.flutter.flutter-gradle-plugin")
+}
+
+val keystoreProperties = Properties()
+val keystorePropertiesFile = rootProject.file("key.properties")
+
+if (keystorePropertiesFile.exists()) {
+    FileInputStream(keystorePropertiesFile).use {
+        keystoreProperties.load(it)
+    }
 }
 
 android {
@@ -28,19 +40,46 @@ android {
                 ?: ""
     }
 
+    signingConfigs {
+        create("release") {
+            if (!keystorePropertiesFile.exists()) {
+                throw GradleException(
+                    "Missing android/key.properties for release signing"
+                )
+            }
+
+            keyAlias = keystoreProperties["keyAlias"] as String?
+            keyPassword = keystoreProperties["keyPassword"] as String?
+            storePassword = keystoreProperties["storePassword"] as String?
+
+            val configuredStoreFile =
+                keystoreProperties["storeFile"] as String?
+
+            if (configuredStoreFile.isNullOrBlank()) {
+                throw GradleException(
+                    "storeFile is missing in android/key.properties"
+                )
+            }
+
+            storeFile = file(configuredStoreFile)
+        }
+    }
+
     buildTypes {
-        release {
-            // Replace this with the release keystore before Play Store release.
+        getByName("debug") {
             signingConfig = signingConfigs.getByName("debug")
+        }
 
-            // Remove unused Java/Kotlin code.
+        getByName("release") {
+            signingConfig = signingConfigs.getByName("release")
+
             isMinifyEnabled = true
-
-            // Remove unused Android resources.
             isShrinkResources = true
 
             proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
+                getDefaultProguardFile(
+                    "proguard-android-optimize.txt"
+                ),
                 "proguard-rules.pro"
             )
         }
