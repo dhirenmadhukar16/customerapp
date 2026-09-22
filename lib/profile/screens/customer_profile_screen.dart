@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/network/api_client.dart';
 import '../../core/security/secure_token_storage.dart';
 import '../../core/theme/app_theme.dart';
+import '../../invoices/screens/customer_invoices_screen.dart';
 import '../../auth/screens/customer_login_screen.dart';
 import 'edit_profile_screen.dart';
 
@@ -264,10 +265,45 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
                                 profile['whatsappNumber'] ?? '-'),
                             const Divider(height: 1, indent: 60),
                             _tile(Icons.badge_outlined, 'Customer ID',
-                                customerId.substring(0, 8).toUpperCase()),
+                                _shortCustomerId(customerId)),
                             const Divider(height: 1, indent: 60),
                             _tile(Icons.loyalty_outlined, 'Loyalty Points',
                                 profile['loyaltyPoints']?.toString() ?? '0'),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: Colors.black.withValues(alpha: 0.05),
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.02),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          children: [
+                            _actionTile(
+                              icon: Icons.receipt_long_outlined,
+                              title: 'My Invoices',
+                              subtitle:
+                                  'View bills, payment status and download paid invoices',
+                              onTap: () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute<void>(
+                                    builder: (_) =>
+                                        const CustomerInvoicesScreen(),
+                                  ),
+                                );
+                              },
+                            ),
                           ],
                         ),
                       ),
@@ -332,5 +368,56 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
             fontWeight: FontWeight.w700),
       ),
     );
+  }
+
+  Widget _actionTile({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return ListTile(
+      onTap: onTap,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 9),
+      leading: Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: AppTheme.accent.withValues(alpha: 0.3),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Icon(icon, color: AppTheme.primary),
+      ),
+      title: Text(
+        title,
+        style: const TextStyle(
+          color: AppTheme.darkText,
+          fontSize: 15,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+      subtitle: Padding(
+        padding: const EdgeInsets.only(top: 3),
+        child: Text(
+          subtitle,
+          style: const TextStyle(
+            color: AppTheme.mutedText,
+            fontSize: 12,
+            height: 1.3,
+          ),
+        ),
+      ),
+      trailing: const Icon(
+        Icons.chevron_right_rounded,
+        color: AppTheme.mutedText,
+      ),
+    );
+  }
+
+  String _shortCustomerId(String value) {
+    final normalized = value.trim();
+    if (normalized.isEmpty) return '-';
+
+    final length = normalized.length < 8 ? normalized.length : 8;
+    return normalized.substring(0, length).toUpperCase();
   }
 }
