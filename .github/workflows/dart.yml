@@ -14,6 +14,10 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
+      # Update these for each new Play Store release.
+      APP_VERSION_NAME: "1.0.2"
+      APP_BUILD_NUMBER: "1029"
+
       WHITEFOX_API_BASE_URL: ${{ secrets.WHITEFOX_API_BASE_URL }}
       WHITEFOX_WS_BASE_URL: ${{ secrets.WHITEFOX_WS_BASE_URL }}
       GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
@@ -38,13 +42,32 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Validate build secrets
+      - name: Validate build settings
         shell: bash
         run: |
           set -euo pipefail
+
           : "${WHITEFOX_API_BASE_URL:?Missing WHITEFOX_API_BASE_URL}"
           : "${WHITEFOX_WS_BASE_URL:?Missing WHITEFOX_WS_BASE_URL}"
           : "${GOOGLE_MAPS_API_KEY:?Missing GOOGLE_MAPS_API_KEY}"
+          : "${APP_VERSION_NAME:?Missing APP_VERSION_NAME}"
+
+          python3 - <<'PY'
+          import os
+
+          value = os.environ.get("APP_BUILD_NUMBER", "")
+          if not value.isascii() or not value.isdigit():
+              raise SystemExit("APP_BUILD_NUMBER must be a positive integer.")
+
+          if not 1 <= int(value) <= 2100000000:
+              raise SystemExit("APP_BUILD_NUMBER is outside the Android version-code range.")
+
+          print(
+              f"Building Whitefox "
+              f"{os.environ['APP_VERSION_NAME']} "
+              f"(version code {value})"
+          )
+          PY
 
       - name: Clean project
         run: flutter clean
@@ -79,7 +102,9 @@ jobs:
           keystore.parent.mkdir(parents=True, exist_ok=True)
 
           encoded = "".join(os.environ["KEYSTORE_BASE64"].split())
-          keystore.write_bytes(base64.b64decode(encoded, validate=True))
+          keystore.write_bytes(
+              base64.b64decode(encoded, validate=True)
+          )
 
           def escape_property(value):
               encoded = value.encode("utf-16-be")
@@ -112,8 +137,12 @@ jobs:
       - name: Build release AAB
         shell: bash
         run: |
+          set -euo pipefail
+
           flutter build appbundle \
             --release \
+            --build-name="$APP_VERSION_NAME" \
+            --build-number="$APP_BUILD_NUMBER" \
             --dart-define=WHITEFOX_API_BASE_URL="$WHITEFOX_API_BASE_URL" \
             --dart-define=WHITEFOX_WS_BASE_URL="$WHITEFOX_WS_BASE_URL" \
             --dart-define=GOOGLE_MAPS_API_KEY="$GOOGLE_MAPS_API_KEY"
@@ -125,6 +154,11 @@ jobs:
 
           AAB="build/app/outputs/bundle/release/app-release.aab"
           EXPECTED="2B:5F:8B:37:F4:01:2F:C9:7F:2D:74:2D:42:66:18:E7:90:4B:A7:FE"
+
+          test -f "$AAB" || {
+            echo "::error::Release AAB was not generated."
+            exit 1
+          }
 
           CERTIFICATE="$(keytool \
             -J-Duser.language=en \
@@ -142,7 +176,7 @@ jobs:
       - name: Upload AAB artifact
         uses: actions/upload-artifact@v4
         with:
-          name: whitefox-customer-aab-${{ github.run_number }}
+          name: whitefox-customer-${{ env.APP_VERSION_NAME }}-${{ env.APP_BUILD_NUMBER }}-${{ github.run_number }}
           path: build/app/outputs/bundle/release/app-release.aab
           if-no-files-found: error
           retention-days: 30
