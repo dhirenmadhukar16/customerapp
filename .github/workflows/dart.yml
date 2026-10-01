@@ -1,4 +1,4 @@
-name: Build WhiteFox Customer APK
+name: Build WhiteFox Customer AAB
 
 on:
   push:
@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 jobs:
-  build-apk:
+  build-aab:
     runs-on: ubuntu-latest
 
     env:
@@ -19,10 +19,9 @@ jobs:
       GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
 
     steps:
-      - name: Checkout latest code
+      - name: Checkout code
         uses: actions/checkout@v4
         with:
-          ref: main
           clean: true
           fetch-depth: 1
 
@@ -39,25 +38,13 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Check Flutter
-        run: flutter doctor -v
-
       - name: Validate build secrets
+        shell: bash
         run: |
-          test -n "$WHITEFOX_API_BASE_URL" || {
-            echo "::error::WHITEFOX_API_BASE_URL is missing"
-            exit 1
-          }
-
-          test -n "$WHITEFOX_WS_BASE_URL" || {
-            echo "::error::WHITEFOX_WS_BASE_URL is missing"
-            exit 1
-          }
-
-          test -n "$GOOGLE_MAPS_API_KEY" || {
-            echo "::error::GOOGLE_MAPS_API_KEY is missing"
-            exit 1
-          }
+          set -euo pipefail
+          : "${WHITEFOX_API_BASE_URL:?Missing WHITEFOX_API_BASE_URL}"
+          : "${WHITEFOX_WS_BASE_URL:?Missing WHITEFOX_WS_BASE_URL}"
+          : "${GOOGLE_MAPS_API_KEY:?Missing GOOGLE_MAPS_API_KEY}"
 
       - name: Clean project
         run: flutter clean
@@ -65,28 +52,104 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Build smaller split APKs
+      - name: Configure release signing
+        shell: bash
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
         run: |
-          flutter build apk \
+          set -euo pipefail
+          umask 077
+
+          : "${KEYSTORE_BASE64:?Missing ANDROID_KEYSTORE_BASE64}"
+          : "${STORE_PASSWORD:?Missing ANDROID_STORE_PASSWORD}"
+          : "${KEY_PASSWORD:?Missing ANDROID_KEY_PASSWORD}"
+          : "${KEY_ALIAS:?Missing ANDROID_KEY_ALIAS}"
+
+          python3 - <<'PY'
+          import base64
+          import os
+          from pathlib import Path
+
+          keystore = Path(
+              "android/app/whitefox-upload-key.jks"
+          ).resolve()
+          keystore.parent.mkdir(parents=True, exist_ok=True)
+
+          encoded = "".join(os.environ["KEYSTORE_BASE64"].split())
+          keystore.write_bytes(base64.b64decode(encoded, validate=True))
+
+          def escape_property(value):
+              encoded = value.encode("utf-16-be")
+              return "".join(
+                  "\\u" + encoded[i:i + 2].hex()
+                  for i in range(0, len(encoded), 2)
+              )
+
+          properties = {
+              "storePassword": os.environ["STORE_PASSWORD"],
+              "keyPassword": os.environ["KEY_PASSWORD"],
+              "keyAlias": os.environ["KEY_ALIAS"],
+              "storeFile": str(keystore),
+          }
+
+          Path("android/key.properties").write_text(
+              "".join(
+                  f"{key}={escape_property(value)}\n"
+                  for key, value in properties.items()
+              ),
+              encoding="ascii",
+          )
+          PY
+
+          keytool -list \
+            -keystore android/app/whitefox-upload-key.jks \
+            -alias "$KEY_ALIAS" \
+            -storepass:env STORE_PASSWORD >/dev/null
+
+      - name: Build release AAB
+        shell: bash
+        run: |
+          flutter build appbundle \
             --release \
-            --split-per-abi \
             --dart-define=WHITEFOX_API_BASE_URL="$WHITEFOX_API_BASE_URL" \
             --dart-define=WHITEFOX_WS_BASE_URL="$WHITEFOX_WS_BASE_URL" \
             --dart-define=GOOGLE_MAPS_API_KEY="$GOOGLE_MAPS_API_KEY"
 
-      - name: Rename ARM64 APK
+      - name: Verify AAB signing certificate
+        shell: bash
         run: |
-          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk \
-             build/app/outputs/flutter-apk/whitefox-customer-arm64-${{ github.run_number }}.apk
+          set -euo pipefail
 
-      - name: Show APK size
-        run: |
-          ls -lh build/app/outputs/flutter-apk/whitefox-customer-arm64-${{ github.run_number }}.apk
+          AAB="build/app/outputs/bundle/release/app-release.aab"
+          EXPECTED="2B:5F:8B:37:F4:01:2F:C9:7F:2D:74:2D:42:66:18:E7:90:4B:A7:FE"
 
-      - name: Upload ARM64 APK
+          CERTIFICATE="$(keytool \
+            -J-Duser.language=en \
+            -J-Duser.country=US \
+            -printcert -jarfile "$AAB")"
+
+          if ! printf '%s\n' "$CERTIFICATE" |
+            grep -Fq "SHA1: $EXPECTED"; then
+            echo "::error::AAB signing certificate does not match the expected Whitefox upload key."
+            exit 1
+          fi
+
+          echo "AAB signing certificate matches the expected upload key."
+
+      - name: Upload AAB artifact
         uses: actions/upload-artifact@v4
         with:
-          name: whitefox-customer-arm64-${{ github.run_number }}
-          path: build/app/outputs/flutter-apk/whitefox-customer-arm64-${{ github.run_number }}.apk
+          name: whitefox-customer-aab-${{ github.run_number }}
+          path: build/app/outputs/bundle/release/app-release.aab
           if-no-files-found: error
           retention-days: 30
+
+      - name: Remove signing files
+        if: always()
+        shell: bash
+        run: |
+          rm -f android/key.properties
+          rm -f android/app/whitefox-upload-key.jks
