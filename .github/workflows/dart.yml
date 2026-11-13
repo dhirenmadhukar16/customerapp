@@ -1,4 +1,5 @@
-name: Build WhiteFox Customer AAB
+
+name: WhiteFox Customer APK Build
 
 on:
   push:
@@ -10,39 +11,43 @@ permissions:
   contents: read
 
 jobs:
-  build-aab:
+  build-apk:
+    name: Build Signed Android APK
     runs-on: ubuntu-latest
 
     env:
-      # Update these for each new Play Store release.
-      APP_VERSION_NAME: "1.0.2"
-      APP_BUILD_NUMBER: "1029"
-
       WHITEFOX_API_BASE_URL: ${{ secrets.WHITEFOX_API_BASE_URL }}
       WHITEFOX_WS_BASE_URL: ${{ secrets.WHITEFOX_WS_BASE_URL }}
       GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
 
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          clean: true
-          fetch-depth: 1
+      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
 
-      - name: Set up Java 17
+      EXPECTED_SHA1: "2B5F8B37F4012FC97F2D742D426618E7904BA7FE"
+
+    steps:
+      # 1. Checkout repository
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2. Setup Java
+      - name: Setup Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
-          cache: gradle
 
-      - name: Set up Flutter
+      # 3. Setup Flutter
+      - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: stable
           cache: true
 
-      - name: Validate build settings
+      # 4. Verify required secrets
+      - name: Validate build configuration
         shell: bash
         run: |
           set -euo pipefail
@@ -50,138 +55,104 @@ jobs:
           : "${WHITEFOX_API_BASE_URL:?Missing WHITEFOX_API_BASE_URL}"
           : "${WHITEFOX_WS_BASE_URL:?Missing WHITEFOX_WS_BASE_URL}"
           : "${GOOGLE_MAPS_API_KEY:?Missing GOOGLE_MAPS_API_KEY}"
-          : "${APP_VERSION_NAME:?Missing APP_VERSION_NAME}"
 
-          python3 - <<'PY'
-          import os
+          : "${ANDROID_KEYSTORE_BASE64:?Missing ANDROID_KEYSTORE_BASE64}"
+          : "${ANDROID_STORE_PASSWORD:?Missing ANDROID_STORE_PASSWORD}"
+          : "${ANDROID_KEY_PASSWORD:?Missing ANDROID_KEY_PASSWORD}"
+          : "${ANDROID_KEY_ALIAS:?Missing ANDROID_KEY_ALIAS}"
 
-          value = os.environ.get("APP_BUILD_NUMBER", "")
-          if not value.isascii() or not value.isdigit():
-              raise SystemExit("APP_BUILD_NUMBER must be a positive integer.")
+          echo "Required build configuration is present."
 
-          if not 1 <= int(value) <= 2100000000:
-              raise SystemExit("APP_BUILD_NUMBER is outside the Android version-code range.")
+      # 5. Configure Android signing
+      - name: Configure Android signing
+        shell: bash
+        run: |
+          set -euo pipefail
 
-          print(
-              f"Building Whitefox "
-              f"{os.environ['APP_VERSION_NAME']} "
-              f"(version code {value})"
+          mkdir -p android/app
+
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" \
+            | base64 --decode > android/app/whitefox-upload-key.jks
+
+          cat > android/key.properties <<EOF
+          storePassword=$ANDROID_STORE_PASSWORD
+          keyPassword=$ANDROID_KEY_PASSWORD
+          keyAlias=$ANDROID_KEY_ALIAS
+          storeFile=whitefox-upload-key.jks
+          EOF
+
+          echo "Android signing configuration created."
+
+      # 6. Verify signing certificate
+      - name: Verify signing certificate
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          CERTIFICATE_OUTPUT=$(
+            keytool -list -v \
+              -keystore android/app/whitefox-upload-key.jks \
+              -alias "$ANDROID_KEY_ALIAS" \
+              -storepass "$ANDROID_STORE_PASSWORD"
           )
-          PY
 
-      - name: Clean project
-        run: flutter clean
+          ACTUAL_SHA1=$(
+            printf '%s\n' "$CERTIFICATE_OUTPUT" |
+            grep -i "SHA1:" |
+            head -n 1 |
+            awk '{print $2}' |
+            tr -d ':' |
+            tr '[:lower:]' '[:upper:]'
+          )
 
-      - name: Install dependencies
+          if [ "$ACTUAL_SHA1" != "$EXPECTED_SHA1" ]; then
+            echo "Signing certificate SHA-1 mismatch."
+            exit 1
+          fi
+
+          echo "Signing certificate verified."
+
+      # 7. Install dependencies
+      - name: Install Flutter dependencies
         run: flutter pub get
 
-      - name: Configure release signing
-        shell: bash
-        env:
-          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-          STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
-          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-        run: |
-          set -euo pipefail
-          umask 077
-
-          : "${KEYSTORE_BASE64:?Missing ANDROID_KEYSTORE_BASE64}"
-          : "${STORE_PASSWORD:?Missing ANDROID_STORE_PASSWORD}"
-          : "${KEY_PASSWORD:?Missing ANDROID_KEY_PASSWORD}"
-          : "${KEY_ALIAS:?Missing ANDROID_KEY_ALIAS}"
-
-          python3 - <<'PY'
-          import base64
-          import os
-          from pathlib import Path
-
-          keystore = Path(
-              "android/app/whitefox-upload-key.jks"
-          ).resolve()
-          keystore.parent.mkdir(parents=True, exist_ok=True)
-
-          encoded = "".join(os.environ["KEYSTORE_BASE64"].split())
-          keystore.write_bytes(
-              base64.b64decode(encoded, validate=True)
-          )
-
-          def escape_property(value):
-              encoded = value.encode("utf-16-be")
-              return "".join(
-                  "\\u" + encoded[i:i + 2].hex()
-                  for i in range(0, len(encoded), 2)
-              )
-
-          properties = {
-              "storePassword": os.environ["STORE_PASSWORD"],
-              "keyPassword": os.environ["KEY_PASSWORD"],
-              "keyAlias": os.environ["KEY_ALIAS"],
-              "storeFile": str(keystore),
-          }
-
-          Path("android/key.properties").write_text(
-              "".join(
-                  f"{key}={escape_property(value)}\n"
-                  for key, value in properties.items()
-              ),
-              encoding="ascii",
-          )
-          PY
-
-          keytool -list \
-            -keystore android/app/whitefox-upload-key.jks \
-            -alias "$KEY_ALIAS" \
-            -storepass:env STORE_PASSWORD >/dev/null
-
-      - name: Build release AAB
+      # 8. Build signed APK
+      - name: Build release APK
         shell: bash
         run: |
           set -euo pipefail
 
-          flutter build appbundle \
-            --release \
-            --build-name="$APP_VERSION_NAME" \
-            --build-number="$APP_BUILD_NUMBER" \
+          flutter build apk --release \
             --dart-define=WHITEFOX_API_BASE_URL="$WHITEFOX_API_BASE_URL" \
             --dart-define=WHITEFOX_WS_BASE_URL="$WHITEFOX_WS_BASE_URL" \
             --dart-define=GOOGLE_MAPS_API_KEY="$GOOGLE_MAPS_API_KEY"
 
-      - name: Verify AAB signing certificate
+      # 9. Verify APK exists
+      - name: Verify APK
         shell: bash
         run: |
           set -euo pipefail
 
-          AAB="build/app/outputs/bundle/release/app-release.aab"
-          EXPECTED="2B:5F:8B:37:F4:01:2F:C9:7F:2D:74:2D:42:66:18:E7:90:4B:A7:FE"
+          APK_PATH="build/app/outputs/flutter-apk/app-release.apk"
 
-          test -f "$AAB" || {
-            echo "::error::Release AAB was not generated."
-            exit 1
-          }
-
-          CERTIFICATE="$(keytool \
-            -J-Duser.language=en \
-            -J-Duser.country=US \
-            -printcert -jarfile "$AAB")"
-
-          if ! printf '%s\n' "$CERTIFICATE" |
-            grep -Fq "SHA1: $EXPECTED"; then
-            echo "::error::AAB signing certificate does not match the expected Whitefox upload key."
+          if [ ! -f "$APK_PATH" ]; then
+            echo "APK file was not generated."
             exit 1
           fi
 
-          echo "AAB signing certificate matches the expected upload key."
+          ls -lh "$APK_PATH"
 
-      - name: Upload AAB artifact
+      # 10. Upload APK artifact
+      - name: Upload signed APK
         uses: actions/upload-artifact@v4
         with:
-          name: whitefox-customer-${{ env.APP_VERSION_NAME }}-${{ env.APP_BUILD_NUMBER }}-${{ github.run_number }}
-          path: build/app/outputs/bundle/release/app-release.aab
+          name: whitefox-customer-release-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
           retention-days: 30
 
-      - name: Remove signing files
+      # 11. Cleanup signing files
+      - name: Cleanup signing files
         if: always()
         shell: bash
         run: |
