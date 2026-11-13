@@ -3,18 +3,16 @@ import 'package:dio/dio.dart';
 import '../security/secure_token_storage.dart';
 
 class ApiClient {
-  static const String _defaultLocalBaseUrl =
-      'https://103.209.145.200';
-  static const String _defaultProdBaseUrl =
-      'https://103.209.145.200';
+  static const String _defaultLocalBaseUrl = 'https://103.209.145.200';
+  static const String _defaultProdBaseUrl = 'https://103.209.145.200';
 
   static const String baseUrl = String.fromEnvironment(
-    'WHITEFOX_API_BASE_URL',
+    'https://103.209.145.200',
     defaultValue: _defaultLocalBaseUrl,
   );
 
   static const String websocketBaseUrl = String.fromEnvironment(
-    'WHITEFOX_WS_BASE_URL',
+    'https://103.209.145.200',
     defaultValue: baseUrl,
   );
 
