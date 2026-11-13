@@ -1,0 +1,57 @@
+name: whitefox_customer_app
+description: "WhiteFox premium laundry customer application."
+publish_to: "none"
+
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+  dio: ^5.9.2
+  shared_preferences: ^2.5.5
+  intl: ^0.20.2
+  url_launcher: ^6.3.2
+  image_picker: ^1.2.2
+  mobile_scanner: ^7.2.0
+  stomp_dart_client: ^3.0.1
+  geolocator: ^14.0.2
+  geocoding: ^5.0.0
+  google_maps_flutter: ^2.14.0
+  http: ^1.6.0
+  flutter_secure_storage: ^10.3.1
+  path_provider: ^2.1.5
+  open_filex: ^4.5.0
+  share_plus: ^10.0.2
+  flutter_animate: ^4.5.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/images/
+
+flutter_launcher_icons:
+  android: "ic_launcher"
+  ios: true
+  image_path: "assets/images/whitefox_app_icon.png"
+  min_sdk_android: 21
+  remove_alpha_ios: true
+  adaptive_icon_background: "#052E22"
+  adaptive_icon_foreground: "assets/images/whitefox_app_icon.png"
+  web:
+    generate: true
+    image_path: "assets/images/whitefox_app_icon.png"
+    background_color: "#052E22"
+    theme_color: "#052E22"
